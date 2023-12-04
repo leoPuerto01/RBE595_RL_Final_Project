@@ -35,6 +35,8 @@ NODES_LIST = [NODES_0,NODES_1,NODES_2,NODES_3,NODES_4,NODES_5,
                   NODES_12,NODES_13,NODES_14,NODES_15,NODES_16,NODES_17]
 N_LINEAR_PATHS = 10
 N_POINTS = np.arange(0.0,1.0,0.01)
+#NROWS = 32
+#NCOLS = 32
 
 
 # input: MultirotorClient to get path for, index of motion primitive
@@ -113,4 +115,18 @@ def reward_function(d_t_min: float,d_t: float,collision: bool) -> float:
         return (R_L+(R_U-R_L)*(DEL_D_U-del_d)/(DEL_D_U-DEL_D_L))*f
     if del_d < DEL_D_L:
         return R_U*f
+    
+def img_format(response: airsim.ImageResponse) -> np.array:
+    
+    img1d = np.fromstring(response.image_data_uint8, dtype=np.uint8)
+    print("Image height and width: ", response.height,response.width, len(img1d))
+    img_rgb = img1d.reshape(response.height,response.width,3)
+    img_rgb = np.flipud(img_rgb)
+    return img_rgb
+    # img_bytes = bytes[140:]
+    # output = np.zeros((NROWS,NCOLS))
+    # for i in range(NROWS):
+    #     for j in range(NCOLS):
+    #         output[i,j] = img_bytes[NCOLS*i+j]
+    # return output
     
