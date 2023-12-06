@@ -116,12 +116,12 @@ def reward_function(d_t_min: float,d_t: float,collision: bool) -> float:
     if del_d < DEL_D_L:
         return R_U*f
     
-def img_format(response: airsim.ImageResponse) -> np.array:
+def img_format_uint8(response: airsim.ImageResponse) -> np.array:
     
     img1d = np.fromstring(response.image_data_uint8, dtype=np.uint8)
     print("Image height and width: ", response.height,response.width, len(img1d))
     img_rgb = img1d.reshape(response.height,response.width,3)
-    img_rgb = np.flipud(img_rgb)
+    #img_rgb = np.flipud(img_rgb)
     return img_rgb
     # img_bytes = bytes[140:]
     # output = np.zeros((NROWS,NCOLS))
@@ -130,3 +130,10 @@ def img_format(response: airsim.ImageResponse) -> np.array:
     #         output[i,j] = img_bytes[NCOLS*i+j]
     # return output
     
+def img_format_float(response: airsim.ImageResponse) -> np.array:
+    # img1d = np.fromstring(response.image_data_uint8, dtype=np.uint8)
+    img1d = np.array(response.image_data_float)
+    print("Image height and width: ", response.height,response.width, len(img1d))
+    img_rgb = img1d.reshape(response.height,response.width)
+    #img_rgb = np.flipud(img_rgb)
+    return img_rgb
