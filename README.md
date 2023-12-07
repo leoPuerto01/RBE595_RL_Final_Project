@@ -7,3 +7,6 @@ Final Project for WPI course RBE 595ST. Reinforcement Learning Fall 2023
 1. Move **settings.json** from the Git repository to that directory and replace the file. 
 1. Restart the sim.
 
+## Setting up the map
+1. Copy contents of Map/ to folder **AirSim\Unreal\Environments\Blocks\Content\FlyingCPP\Maps**
+2. Load the sim.
