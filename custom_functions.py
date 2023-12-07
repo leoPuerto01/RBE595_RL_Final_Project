@@ -3,7 +3,7 @@ from Bezier import Bezier
 import numpy as np
 from math import tanh
 
-# Constants
+# Learning Constants
 D_MAX = 5.0
 R_L = 0.0
 R_U = 1.0
@@ -12,6 +12,7 @@ DEL_D_U = 1.0
 R_DP = -0.5
 R_CP = -1.0
 N = 1.0
+# Motion primitive constants
 NODES_0 = np.array([[0.0,0.0,0.0]])
 NODES_1 = np.array([[0.0,0.0,-i] for i in np.arange(0.0,N+.01,0.01)])
 NODES_2 = np.array([[0.0,-i,-i] for i in np.arange(0.0,N+.01,0.01)])
@@ -35,8 +36,17 @@ NODES_LIST = [NODES_0,NODES_1,NODES_2,NODES_3,NODES_4,NODES_5,
                   NODES_12,NODES_13,NODES_14,NODES_15,NODES_16,NODES_17]
 N_LINEAR_PATHS = 10
 N_POINTS = np.arange(0.0,1.0,0.01)
-#NROWS = 32
-#NCOLS = 32
+
+# Drone Initialization Constants
+GOAL1 = "Goal1"
+GOAL2 = "Goal2"
+GOAL3 = "Goal3"
+START1 = "Start1"
+START2 = "Start2"
+START3 = "Start3"
+STARTS = [START1,START2,START3]
+GOALS = [GOAL1,GOAL2,GOAL3]
+
 
 
 # input: MultirotorClient to get path for, index of motion primitive
@@ -61,6 +71,7 @@ def getPath(client: airsim.MultirotorClient,i: int) -> list:
         p.append(world_frame_vec)   
     return p
 
+# This should not be used
 # input: MultirotorClient
 # output: list of motion primitive paths
 def generateMotionPrimitives(client: airsim.MultirotorClient) -> list:
@@ -94,10 +105,10 @@ def generateMotionPrimitives(client: airsim.MultirotorClient) -> list:
 # execute the motion primitive from the list based on index i with velocity vel
 # input: MultirotorClient to move, index of motion primitive, desired velocity
 # output: None
-def execute_motion_primitive(client, i: int, vel: float) -> None:
+def execute_motion_primitive(client: airsim.MultirotorClient, i: int, vel: float) -> None:
     p = getPath(client, i)
     client.moveOnPathAsync(path=p,velocity=vel).join()
-    client.hoverAsync().join()
+    # client.hoverAsync().join()
 
 # reward function for the RL algorithm based on Camci et al.
 # input: euclidean distance at beginning of timestep, at end of timestep, boolean asserted if drone has collided
@@ -115,25 +126,58 @@ def reward_function(d_t_min: float,d_t: float,collision: bool) -> float:
         return (R_L+(R_U-R_L)*(DEL_D_U-del_d)/(DEL_D_U-DEL_D_L))*f
     if del_d < DEL_D_L:
         return R_U*f
-    
+
+# processing for images with pixels interpreted as uint8
+# input: ImageResponse from airsim
+# output: np.array of img data
 def img_format_uint8(response: airsim.ImageResponse) -> np.array:
-    
+    # convert string of bytes to array of uint8
     img1d = np.fromstring(response.image_data_uint8, dtype=np.uint8)
     print("Image height and width: ", response.height,response.width, len(img1d))
+    # reshape linear array into 2-d pixel array
     img_rgb = img1d.reshape(response.height,response.width,3)
-    #img_rgb = np.flipud(img_rgb)
     return img_rgb
-    # img_bytes = bytes[140:]
-    # output = np.zeros((NROWS,NCOLS))
-    # for i in range(NROWS):
-    #     for j in range(NCOLS):
-    #         output[i,j] = img_bytes[NCOLS*i+j]
-    # return output
-    
+   
+# processing for images with pixels interpreted as floats
+# input: ImageResponse from airsim
+# output: np.array of img data
 def img_format_float(response: airsim.ImageResponse) -> np.array:
-    # img1d = np.fromstring(response.image_data_uint8, dtype=np.uint8)
+    # convert list to np.array
     img1d = np.array(response.image_data_float)
     print("Image height and width: ", response.height,response.width, len(img1d))
+    # reshape tp 2-d
     img_rgb = img1d.reshape(response.height,response.width)
-    #img_rgb = np.flipud(img_rgb)
     return img_rgb
+
+# calculates the relative position of the moving setpoint wrt the drone in drone body frame
+# input: MultirotorClient, moving setpoint
+# output: vector representing relative position in body frame
+def calculate_relative_pos(client: airsim.MultirotorClient, set_pt: airsim.Vector3r) -> airsim.Vector3r:
+    state = client.getMultirotorState()
+    pos = state.kinematics_estimated.position
+    orientation = state.kinematics_estimated.orientation
+    diff_vec_world = set_pt-pos
+    diff_vec_body = orientation.star()*diff_vec_world*orientation
+    
+    return diff_vec_body
+
+# calculates global path in world frame 
+# input: client, environment number (1,2,3)
+# output: vector representing global path
+def init_episode(client: airsim.MultirotorClient, i: int) -> airsim.Vector3r:
+    start_pose = client.simGetObjectPose(STARTS[i-1])
+    goal_pose = client.simGetObjectPose(GOALS[i-1])
+    client.simSetVehiclePose(start_pose,ignore_collision=True)
+    client.armDisarm(True)
+    client.takeoffAsync().join()
+
+    return goal_pose.position-client.getMultirotorState().kinematics_estimated.position
+
+# calculates moving setpoint for timestep in world frame
+# input: client, global_path, timestep
+# output: moving setpoint in world frame, maxed at the end goal
+def get_moving_setpoint(client:airsim.MultirotorClient,global_path:airsim.Vector3r,timestep:int) -> airsim.Vector3r:
+    gp_unit = global_path/global_path.get_length()
+    sp = timestep*gp_unit
+    return min(np.array([global_path,sp]),key=lambda p: p.get_length())
+
