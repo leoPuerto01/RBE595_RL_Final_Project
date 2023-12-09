@@ -178,6 +178,40 @@ def init_episode(client: airsim.MultirotorClient, i: int) -> airsim.Vector3r:
 # output: moving setpoint in world frame, maxed at the end goal
 def get_moving_setpoint(client:airsim.MultirotorClient,global_path:airsim.Vector3r,timestep:int) -> airsim.Vector3r:
     gp_unit = global_path/global_path.get_length()
-    sp = timestep*gp_unit
+    sp = gp_unit*timestep
     return min(np.array([global_path,sp]),key=lambda p: p.get_length())
 
+# returns index of action to take based on epsilon-greedy policy
+# input: q function, state, epsilon
+# output: index of action to be taken
+def epsilon_greedy(q,s,epsilon):
+    s = (s[0],s[1])
+    mag_A = len(NODES_LIST)
+    # print("mag_A: ", mag_A)
+    a_star = np.argmax(q[s])
+    weights = np.zeros(mag_A)+epsilon/mag_A
+    weights[a_star]=1-epsilon+epsilon/mag_A 
+    return np.random.choice(mag_A,p=weights)
+
+class Episode:
+    # initializes episode parameters
+    # input: client, environment number (1,2,3)
+    # output: None
+    def __init__(self,client: airsim.MultirotorClient, n:int) -> None:
+        self.n = n
+        self.client = client
+        start = client.simGetObjectPose(STARTS[n-1])
+        self.goal_pose = client.simGetObjectPose(GOALS[n-1])
+        self.client.simSetVehiclePose(start,ignore_collision=True)
+        self.client.armDisarm(True)
+        self.client.takeoffAsync().join()
+        self.start_pose = self.client.getMultirotorState().kinematics_estimated.position
+        self.global_path = self.goal_pose.position-self.start_pose
+    # calculates moving setpoint for timestep in world frame
+    # input: client, global_path, timestep
+    # output: moving setpoint in world frame, maxed at the end goal
+    def get_moving_setpoint(self,timestep) -> airsim.Vector3r:
+        gp_unit = self.global_path/self.global_path.get_length()
+        sp = gp_unit*timestep
+        return min(np.array([self.global_path,sp]),key=lambda p: p.get_length())+self.start_pose
+    

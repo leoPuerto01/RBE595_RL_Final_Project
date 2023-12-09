@@ -18,7 +18,7 @@ import custom_functions as custom
 client = airsim.MultirotorClient()
 client.confirmConnection()
 client.enableApiControl(True)
-custom.init_episode(client,0)
+gp = custom.Episode(client=client,n=2)
 # startPose1 = client.simGetObjectPose("PlayerStart1")
 # s = pprint.pformat(startPose1)
 # print("start pose: %s" % s)
@@ -50,12 +50,15 @@ custom.init_episode(client,0)
 state = client.getMultirotorState()
 print("state: %s" % pprint.pformat(state))
 
-airsim.wait_key('Press any key to move vehicle to (-10, 10, -10) at 5 m/s')
+airsim.wait_key('Press any key to follow the global path')
 #client.moveToPositionAsync(-10, 10, -10, 5).join()
-custom.execute_motion_primitive(client,10,1.0)
+# custom.execute_motion_primitive(client,10,1.0)
 # p = custom.getPath(client)
 # p = custom.generateMotionPrimitives(client)[17]
-
+for i in range(0,50):
+    p = gp.get_moving_setpoint(timestep=i)
+    x,y,z = p.x_val,p.y_val,p.z_val
+    client.moveToPositionAsync(x=x,y=y,z=z,velocity=1.0).join()
 
 # state = client.getMultirotorState()
 # print("state: %s" % pprint.pformat(state))
